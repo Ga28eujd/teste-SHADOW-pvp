@@ -794,106 +794,149 @@ local function hasLOS(fromPos, toPos)
 end
 
 -- ── Tabela de objetos ESP por jogador ────────────────────────────
+-- espObjects[player] = { name, box, trace, rage, life, lifeBar, head }
 local espObjects = {}
 
 local function getCharParts(char)
-    if not char then return nil, nil, nil end
+    if not char then return nil end
     local hrp  = char:FindFirstChild("HumanoidRootPart")
     local head = char:FindFirstChild("Head")
     local hum  = char:FindFirstChildOfClass("Humanoid")
-    if not (hrp and head and hum) then return nil, nil, nil end
-    if not hrp.Parent or not head.Parent then return nil, nil, nil end
+    if not (hrp and head and hum) then return nil end
     return hrp, head, hum
 end
 
--- ── Helper: cria Drawing com propriedades iniciais ────────────────
-local function newDraw(kind, props)
-    local d = Drawing.new(kind)
-    for k, v in pairs(props) do d[k] = v end
-    return d
-end
-
--- ── Cria todos os objetos Drawing ESP para um jogador ─────────────
+-- ── Cria todos os objetos ESP para um jogador ────────────────────
 local function createEspForPlayer(player)
     if player == LocalPlayer then return end
     if espObjects[player] then return end
 
     local obj = {}
-    local col = getEspColor()
 
-    -- ESP NAME — texto branco com outline, centralizado, acima do box
-    obj.name = newDraw("Text", {
-        Text         = player.Name,
-        Size         = 14,
-        Color        = Color3.fromRGB(255, 255, 255),
-        Outline      = true,
-        OutlineColor = Color3.fromRGB(0, 0, 0),
-        Font         = Drawing.Fonts.GothamBold,
-        Center       = true,
-        Visible      = false,
-    })
+    -- ESP NAME
+    local nameLabel = Instance.new("TextLabel")
+    nameLabel.Name = "EspName_" .. player.Name
+    nameLabel.BackgroundTransparency = 1
+    nameLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    nameLabel.TextStrokeTransparency = 0.5
+    nameLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    nameLabel.Font = Enum.Font.GothamBold
+    nameLabel.TextSize = 14
+    nameLabel.Text = player.Name
+    nameLabel.Size = UDim2.new(0, 120, 0, 20)
+    nameLabel.AnchorPoint = Vector2.new(0.5, 1)
+    nameLabel.Visible = false
+    nameLabel.ZIndex = 5
+    nameLabel.Parent = EspContainer
+    obj.name = nameLabel
 
-    -- ESP RAGE — texto amarelo com outline, acima do NAME
-    obj.rage = newDraw("Text", {
-        Text         = "0m",
-        Size         = 12,
-        Color        = Color3.fromRGB(255, 220, 50),
-        Outline      = true,
-        OutlineColor = Color3.fromRGB(0, 0, 0),
-        Font         = Drawing.Fonts.Gotham,
-        Center       = true,
-        Visible      = false,
-    })
+    -- ESP RAGE (distância) — fica acima do NAME
+    local rageLabel = Instance.new("TextLabel")
+    rageLabel.Name = "EspRage_" .. player.Name
+    rageLabel.BackgroundTransparency = 1
+    rageLabel.TextColor3 = Color3.fromRGB(255, 220, 50)
+    rageLabel.TextStrokeTransparency = 0.5
+    rageLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    rageLabel.Font = Enum.Font.Gotham
+    rageLabel.TextSize = 12
+    rageLabel.Text = "0m"
+    rageLabel.Size = UDim2.new(0, 100, 0, 16)
+    rageLabel.AnchorPoint = Vector2.new(0.5, 1)
+    rageLabel.Visible = false
+    rageLabel.ZIndex = 5
+    rageLabel.Parent = EspContainer
+    obj.rage = rageLabel
 
-    -- ESP BOX — Quad com 4 vértices em coordenadas viewport diretas
-    obj.box = newDraw("Quad", {
-        Color     = col,
-        Thickness = 2,
-        Filled    = false,
-        Visible   = false,
-    })
+    -- ESP BOX (4 linhas: top, bottom, left, right)
+    local box = {}
+    for _, side in ipairs({"Top","Bottom","Left","Right"}) do
+        local line = Instance.new("Frame")
+        line.Name = "EspBox_" .. side .. "_" .. player.Name
+        line.BackgroundColor3 = getEspColor()
+        line.BorderSizePixel = 0
+        line.Visible = false
+        line.ZIndex = 4
+        line.Parent = EspContainer
+        box[side] = line
+    end
+    obj.box = box
 
-    -- ESP TRACE — linha do topo da tela até a cabeça
-    obj.trace = newDraw("Line", {
-        Color     = col,
-        Thickness = 1,
-        Visible   = false,
-    })
+    -- ESP TRACE (linha da parte superior da tela até a cabeça)
+    local traceLine = Instance.new("Frame")
+    traceLine.Name = "EspTrace_" .. player.Name
+    traceLine.BackgroundColor3 = getEspColor()
+    traceLine.BorderSizePixel = 0
+    traceLine.AnchorPoint = Vector2.new(0.5, 0)
+    traceLine.Visible = false
+    traceLine.ZIndex = 3
+    traceLine.Parent = EspContainer
+    obj.trace = traceLine
 
-    -- ESP LIFE fundo — linha grossa cinza escura (lado direito do box)
-    obj.lifeBG = newDraw("Line", {
-        Color     = Color3.fromRGB(40, 40, 40),
-        Thickness = 5,
-        Visible   = false,
-    })
+    -- ESP LIFE (barra de vida ao lado direito do box)
+    local lifeBG = Instance.new("Frame")
+    lifeBG.Name = "EspLifeBG_" .. player.Name
+    lifeBG.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    lifeBG.BorderSizePixel = 0
+    lifeBG.Visible = false
+    lifeBG.ZIndex = 4
+    lifeBG.Parent = EspContainer
+    obj.lifeBG = lifeBG
 
-    -- ESP LIFE barra — linha colorida proporcional à vida
-    obj.lifeBar = newDraw("Line", {
-        Color     = Color3.fromRGB(50, 220, 50),
-        Thickness = 5,
-        Visible   = false,
-    })
+    local lifeBar = Instance.new("Frame")
+    lifeBar.Name = "EspLife_" .. player.Name
+    lifeBar.BackgroundColor3 = Color3.fromRGB(50, 220, 50)
+    lifeBar.BorderSizePixel = 0
+    lifeBar.AnchorPoint = Vector2.new(0, 1)
+    lifeBar.Size = UDim2.new(1, 0, 1, 0)
+    lifeBar.ZIndex = 5
+    lifeBar.Parent = lifeBG
+    obj.lifeBar = lifeBar
 
-    -- ESP HEAD — círculo semiopaco na cabeça (verde=LOS, vermelho=bloqueado)
-    obj.head = newDraw("Circle", {
-        Color        = Color3.fromRGB(50, 220, 50),
-        Thickness    = 2,
-        Filled       = true,
-        Transparency = 0.45,
-        Visible      = false,
-    })
+    -- ESP HEAD (bola semitransparente na cabeça)
+    local headCircle = Instance.new("Frame")
+    headCircle.Name = "EspHead_" .. player.Name
+    headCircle.BackgroundColor3 = Color3.fromRGB(50, 220, 50)
+    headCircle.BackgroundTransparency = 0.45
+    headCircle.BorderSizePixel = 0
+    headCircle.AnchorPoint = Vector2.new(0.5, 0.5)
+    headCircle.Visible = false
+    headCircle.ZIndex = 6
+    headCircle.Parent = EspContainer
+
+    local headCorner = Instance.new("UICorner")
+    headCorner.CornerRadius = UDim.new(1, 0)
+    headCorner.Parent = headCircle
+    obj.head = headCircle
 
     espObjects[player] = obj
 end
 
--- ── Remove Drawing ESP de um jogador ─────────────────────────────
+-- ── Remove ESP de um jogador ─────────────────────────────────────
 local function removeEspForPlayer(player)
     local obj = espObjects[player]
     if not obj then return end
-    for _, d in pairs(obj) do
-        pcall(function() d:Remove() end)
+    if obj.name   then obj.name:Destroy() end
+    if obj.rage   then obj.rage:Destroy() end
+    if obj.trace  then obj.trace:Destroy() end
+    if obj.lifeBG then obj.lifeBG:Destroy() end
+    if obj.head   then obj.head:Destroy() end
+    if obj.box then
+        for _, line in pairs(obj.box) do line:Destroy() end
     end
     espObjects[player] = nil
+end
+
+-- ── Desenha uma linha 2D entre dois pontos (Frame rotacionado) ───
+local function drawLine2D(frame, p1, p2, thickness)
+    local dx   = p2.X - p1.X
+    local dy   = p2.Y - p1.Y
+    local len  = math.sqrt(dx*dx + dy*dy)
+    local midX = (p1.X + p2.X) / 2
+    local midY = (p1.Y + p2.Y) / 2
+    local angle = math.atan2(dy, dx)
+    frame.Position = UDim2.new(0, midX - len/2, 0, midY - thickness/2)
+    frame.Size     = UDim2.new(0, len, 0, thickness)
+    frame.Rotation = math.deg(angle)
 end
 
 -- ── Inicializa ESP para jogadores já existentes ──────────────────
@@ -914,137 +957,179 @@ RunService.RenderStepped:Connect(function()
                      state.toggles.ESP_LIFE  or state.toggles.ESP_HEAD
 
     for player, obj in pairs(espObjects) do
-        pcall(function()
-            local char = player.Character
-            local hrp, head, hum = getCharParts(char)
+        local char = player.Character
+        local hrp, head, hum = getCharParts(char)
 
-            local function hideAll()
-                obj.name.Visible    = false
-                obj.rage.Visible    = false
-                obj.box.Visible     = false
-                obj.trace.Visible   = false
-                obj.lifeBG.Visible  = false
-                obj.lifeBar.Visible = false
-                obj.head.Visible    = false
+        local function hideAll()
+            if obj.name   then obj.name.Visible   = false end
+            if obj.rage   then obj.rage.Visible   = false end
+            if obj.trace  then obj.trace.Visible  = false end
+            if obj.lifeBG then obj.lifeBG.Visible = false end
+            if obj.head   then obj.head.Visible   = false end
+            if obj.box then
+                for _, line in pairs(obj.box) do line.Visible = false end
+            end
+        end
+
+        if not anyEspOn or not hrp or not head or not hum then
+            hideAll()
+        else
+            -- ── Projeta partes reais do corpo diretamente ─────────
+            -- Cada ponto 3D é convertido para pixel exato na tela.
+            -- Nunca deriva porque usa a posição real da parte do corpo.
+
+            local headPos = head.Position
+            local hrpPos  = hrp.Position
+
+            -- Topo da cabeça e base dos pés usando partes reais
+            local topPos  = headPos + Vector3.new(0, 0.6, 0)
+            local feetPos = hrpPos  - Vector3.new(0, 3.1, 0)
+
+            -- Largura baseada nos lados reais do HRP
+            local hrpCF   = hrp.CFrame
+            local rightVec = hrpCF.RightVector * 0.85
+
+            -- Projeta os 4 cantos 3D reais do personagem
+            local function w2v(pos)
+                local sp, onScreen = Camera:WorldToViewportPoint(pos)
+                return Vector2.new(sp.X, sp.Y), onScreen, sp.Z
             end
 
-            if not anyEspOn or not hrp or not head or not hum then
-                hideAll(); return
-            end
+            local topL,  _, topZ  = w2v(topPos  - rightVec)
+            local topR,  _        = w2v(topPos  + rightVec)
+            local botL,  _        = w2v(feetPos - rightVec)
+            local botR,  _        = w2v(feetPos + rightVec)
+            local headSP, headOn, headZ = w2v(headPos)
 
-            -- ── Projetar 4 cantos 3D reais do personagem ──────────
-            local cf    = hrp.CFrame
-            local right = cf.RightVector * 0.9
-            local topPos  = head.Position + Vector3.new(0, 0.7, 0)
-            local feetPos = hrp.Position  - Vector3.new(0, 3.0, 0)
+            -- Só desenha se a cabeça estiver na frente da câmera
+            if not headOn or headZ <= 0 then hideAll(); continue end
 
-            -- worldToScreen retorna Vector3 (X,Y = pixel, Z = profundidade)
-            local function w2s(pos)
-                local v = Camera:WorldToViewportPoint(pos)
-                return Vector2.new(v.X, v.Y), v.Z
-            end
+            -- Bounding box 2D a partir dos 4 cantos reais
+            local minX = math.min(topL.X, topR.X, botL.X, botR.X)
+            local maxX = math.max(topL.X, topR.X, botL.X, botR.X)
+            local minY = math.min(topL.Y, topR.Y, botL.Y, botR.Y)
+            local maxY = math.max(topL.Y, topR.Y, botL.Y, botR.Y)
 
-            local tlV, tlZ = w2s(topPos  - right)  -- topo esquerdo
-            local trV, _   = w2s(topPos  + right)  -- topo direito
-            local blV, _   = w2s(feetPos - right)  -- base esquerda
-            local brV, _   = w2s(feetPos + right)  -- base direita
-            local headV, headZ = w2s(head.Position)
+            local boxW   = maxX - minX
+            local boxH   = maxY - minY
+            local boxTop = minY
+            local boxBot = maxY
+            local boxX   = minX
 
-            -- Só desenha se na frente da câmera
-            if headZ <= 0 then hideAll(); return end
+            local dist   = (hrpPos - myPos).Magnitude
+            local scale  = getScale(dist)
+            local espCol = getEspColor()
 
-            -- Bounding box 2D
-            local minX = math.min(tlV.X, trV.X, blV.X, brV.X)
-            local maxX = math.max(tlV.X, trV.X, blV.X, brV.X)
-            local minY = math.min(tlV.Y, trV.Y, blV.Y, brV.Y)
-            local maxY = math.max(tlV.Y, trV.Y, blV.Y, brV.Y)
-            local boxW = maxX - minX
-            local boxH = maxY - minY
-
-            local dist  = (hrp.Position - myPos).Magnitude
-            local scale = getScale(dist)
-            local col   = getEspColor()
-
-            -- ── ESP BOX (Quad — coordenadas diretas) ──────────────
-            obj.box.Visible = state.toggles.ESP_BOX
-            if obj.box.Visible then
-                obj.box.Color     = col
-                obj.box.Thickness = math.max(1, math.floor(2 * scale))
-                obj.box.PointA    = Vector2.new(minX, minY)  -- topo esquerdo
-                obj.box.PointB    = Vector2.new(maxX, minY)  -- topo direito
-                obj.box.PointC    = Vector2.new(maxX, maxY)  -- base direita
-                obj.box.PointD    = Vector2.new(minX, maxY)  -- base esquerda
+            -- ── ESP BOX ───────────────────────────────────────────
+            if obj.box then
+                local bOn   = state.toggles.ESP_BOX
+                local thick = math.max(1, math.floor(2 * scale))
+                for _, line in pairs(obj.box) do
+                    line.Visible = bOn
+                    line.BackgroundColor3 = espCol
+                end
+                if bOn then
+                    obj.box.Top.Position    = UDim2.new(0, boxX,               0, boxTop)
+                    obj.box.Top.Size        = UDim2.new(0, boxW,               0, thick)
+                    obj.box.Bottom.Position = UDim2.new(0, boxX,               0, boxBot)
+                    obj.box.Bottom.Size     = UDim2.new(0, boxW,               0, thick)
+                    obj.box.Left.Position   = UDim2.new(0, boxX,               0, boxTop)
+                    obj.box.Left.Size       = UDim2.new(0, thick,              0, boxH)
+                    obj.box.Right.Position  = UDim2.new(0, boxX + boxW - thick, 0, boxTop)
+                    obj.box.Right.Size      = UDim2.new(0, thick,              0, boxH)
+                end
             end
 
             -- ── ESP NAME ──────────────────────────────────────────
-            -- Drawing.Text: Position = pixel do topo-esquerdo do texto
-            -- Center = true centraliza horizontalmente no Position.X
-            obj.name.Visible = state.toggles.ESP_NAME
-            if obj.name.Visible then
-                local fs = math.max(8, math.floor(14 * scale))
-                obj.name.Size     = fs
-                obj.name.Color    = col
-                obj.name.Text     = player.Name
-                -- Centralizado no box, logo acima do topo (minY)
-                obj.name.Position = Vector2.new(minX + boxW / 2, minY - fs - 4)
+            -- Ancorado no topo real da cabeça (topPos projetado)
+            if obj.name then
+                local nOn = state.toggles.ESP_NAME
+                obj.name.Visible = nOn
+                if nOn then
+                    local fs = math.max(8, math.floor(14 * scale))
+                    local lw = math.max(80, boxW + 10)
+                    obj.name.TextSize    = fs
+                    obj.name.Size        = UDim2.new(0, lw, 0, fs + 4)
+                    obj.name.AnchorPoint = Vector2.new(0.5, 1)
+                    -- Posição X = centro real do personagem na tela
+                    -- Posição Y = topo real do personagem na tela
+                    obj.name.Position    = UDim2.new(0, minX + boxW / 2, 0, boxTop - 2)
+                end
             end
 
             -- ── ESP RAGE ──────────────────────────────────────────
-            obj.rage.Visible = state.toggles.ESP_RAGE
-            if obj.rage.Visible then
-                local fs = math.max(7, math.floor(12 * scale))
-                local nameH = state.toggles.ESP_NAME
-                    and (math.max(8, math.floor(14 * scale)) + 6) or 0
-                obj.rage.Size     = fs
-                obj.rage.Text     = math.floor(dist) .. "m"
-                obj.rage.Position = Vector2.new(minX + boxW / 2, minY - fs - 4 - nameH)
+            if obj.rage then
+                local rOn = state.toggles.ESP_RAGE
+                obj.rage.Visible = rOn
+                if rOn then
+                    local fs    = math.max(7, math.floor(12 * scale))
+                    local nameH = state.toggles.ESP_NAME
+                        and (math.max(8, math.floor(14 * scale)) + 6) or 0
+                    obj.rage.TextSize    = fs
+                    obj.rage.Text        = math.floor(dist) .. "m"
+                    obj.rage.Size        = UDim2.new(0, 80, 0, fs + 4)
+                    obj.rage.AnchorPoint = Vector2.new(0.5, 1)
+                    obj.rage.Position    = UDim2.new(0, minX + boxW / 2, 0, boxTop - 2 - nameH)
+                end
             end
 
             -- ── ESP TRACE ─────────────────────────────────────────
-            obj.trace.Visible = state.toggles.ESP_TRACE
-            if obj.trace.Visible then
-                obj.trace.Color     = col
-                obj.trace.Thickness = math.max(1, math.floor(2 * scale))
-                obj.trace.From      = Vector2.new(Camera.ViewportSize.X / 2, 0)
-                obj.trace.To        = headV
+            if obj.trace then
+                local tOn = state.toggles.ESP_TRACE
+                obj.trace.Visible = tOn
+                if tOn then
+                    local thick = math.max(1, math.floor(2 * scale))
+                    -- Linha do centro-topo da tela até a posição real da cabeça
+                    local topOfScreen = Vector2.new(Camera.ViewportSize.X / 2, 0)
+                    drawLine2D(obj.trace, topOfScreen, headSP, thick)
+                    obj.trace.BackgroundColor3 = espCol
+                end
             end
 
             -- ── ESP LIFE ──────────────────────────────────────────
-            local lifeOn = state.toggles.ESP_LIFE
-            obj.lifeBG.Visible  = lifeOn
-            obj.lifeBar.Visible = lifeOn
-            if lifeOn then
-                local thick = math.max(3, math.floor(5 * scale))
-                local barX  = maxX + math.max(2, math.floor(3 * scale))
+            if obj.lifeBG then
+                local lOn = state.toggles.ESP_LIFE
+                obj.lifeBG.Visible = lOn
+                if lOn then
+                    local barW   = math.max(3, math.floor(4 * scale))
+                    local barGap = math.max(2, math.floor(3 * scale))
+                    -- Ancora no lado direito real do box
+                    local barX   = maxX + barGap
+                    obj.lifeBG.Position = UDim2.new(0, barX, 0, boxTop)
+                    obj.lifeBG.Size     = UDim2.new(0, barW, 0, boxH)
 
-                obj.lifeBG.Thickness = thick
-                obj.lifeBG.From      = Vector2.new(barX, minY)
-                obj.lifeBG.To        = Vector2.new(barX, maxY)
+                    local maxHp = hum.MaxHealth
+                    local curHp = hum.Health
+                    local ratio = maxHp > 0 and math.clamp(curHp / maxHp, 0, 1) or 0
+                    obj.lifeBar.Size     = UDim2.new(1, 0, ratio, 0)
+                    obj.lifeBar.Position = UDim2.new(0, 0, 1 - ratio, 0)
 
-                local ratio = hum.MaxHealth > 0
-                    and math.clamp(hum.Health / hum.MaxHealth, 0, 1) or 0
-                local barTop = maxY - boxH * ratio  -- cresce de baixo pra cima
-
-                obj.lifeBar.Thickness = thick
-                obj.lifeBar.From      = Vector2.new(barX, barTop)
-                obj.lifeBar.To        = Vector2.new(barX, maxY)
-
-                local r = math.floor((1 - ratio) * 255)
-                local g = math.floor(ratio * 220)
-                obj.lifeBar.Color = Color3.fromRGB(r, g, 30)
+                    local r = math.floor((1 - ratio) * 255)
+                    local g = math.floor(ratio * 220)
+                    obj.lifeBar.BackgroundColor3 = Color3.fromRGB(r, g, 30)
+                end
             end
 
             -- ── ESP HEAD ──────────────────────────────────────────
-            obj.head.Visible = state.toggles.ESP_HEAD
-            if obj.head.Visible then
-                local sz  = math.max(5, math.floor(20 * scale))
-                local los = myHRP and hasLOS(myHRP.Position, head.Position)
-                obj.head.Radius   = sz
-                obj.head.Position = headV  -- Drawing.Circle.Position = centro do círculo
-                obj.head.Color    = los
-                    and Color3.fromRGB(50, 220, 50)
-                    or  Color3.fromRGB(220, 50, 50)
+            -- Ancorado na posição real da cabeça projetada
+            if obj.head then
+                local hOn = state.toggles.ESP_HEAD
+                obj.head.Visible = hOn
+                if hOn then
+                    local sz = math.max(6, math.floor(20 * scale))
+                    obj.head.Size        = UDim2.new(0, sz, 0, sz)
+                    obj.head.AnchorPoint = Vector2.new(0.5, 0.5)
+                    -- Usa headSP = projeção exata da posição da cabeça
+                    obj.head.Position    = UDim2.new(0, headSP.X, 0, headSP.Y)
+
+                    local los = myHRP and hasLOS(myHRP.Position, headPos)
+                    obj.head.BackgroundColor3 = los
+                        and Color3.fromRGB(50, 220, 50)
+                        or  Color3.fromRGB(220, 50, 50)
+                end
             end
-        end) -- pcall
-    end -- for
-print("[ShadowMenu] ESP Drawing loaded.")
+        end
+    end
+end)
+
+print("[ShadowMenu] ESP logic loaded.")
